@@ -95,7 +95,9 @@ def plan_batch(cars: list[CarState], calls: list[CallRequest]) -> BatchPlanResul
         ]
         best = pick_car(current, call)
         if best is None:
-            return BatchPlanResult(plans, call.call_id)
+            # 任一无车可接：整批复核作废，前面已试派的计划一律不下发，
+            # 保证调用方拿到的 assignments 为空、状态停留在提交前。
+            return BatchPlanResult([], call.call_id)
         loads[best.car_id] += call.passengers
         plans.append(Assignment(call.call_id, best.car_id, best.score))
     return BatchPlanResult(plans, None)
