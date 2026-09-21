@@ -138,6 +138,15 @@ def dispatch_batch(body: BatchDispatchRequest, db: Session = Depends(get_db)):
 
     # 试派阶段：纯计算，不修改任何 ORM 对象、不写日志
     result = plan_batch(cars, calls)
+    if result.failed_call_id is not None:
+        # 整批失败：不落库任何一笔，工单/载荷/回放全部保持提交前状态
+        db.rollback()
+        raise HTTPException(
+            409,
+            f"联派失败：呼梯 #{result.failed_call_id} 无可用轿厢（满员），本批全部不派",
+        )
+
+    # 全部试派成功后才一次性写入并提交
     car_by_id = {c.id: c for c in car_rows}
     ticket_by_id = {t.id: t for t in tickets}
     for a in result.assignments:
@@ -157,17 +166,9 @@ def dispatch_batch(body: BatchDispatchRequest, db: Session = Depends(get_db)):
             )
         )
     db.commit()
-    if result.failed_call_id is not None:
-        raise HTTPException(
-            409,
-            f"联派失败：呼梯 #{result.failed_call_id} 无可用轿厢（满员），本批全部不派",
-        )
-    assigned = []
     for t in tickets:
         db.refresh(t)
-        if t.status == "assigned":
-            assigned.append(t)
-    return assigned
+    return tickets
 
 
 @api_router.get("/replay", response_model=list[LogOut])

@@ -95,7 +95,8 @@ def plan_batch(cars: list[CarState], calls: list[CallRequest]) -> BatchPlanResul
         ]
         best = pick_car(current, call)
         if best is None:
-            return BatchPlanResult(plans, call.call_id)
+            # 整批失败：丢弃此前累计的试派计划，调用方不得据此落库
+            return BatchPlanResult([], call.call_id)
         loads[best.car_id] += call.passengers
         plans.append(Assignment(call.call_id, best.car_id, best.score))
     return BatchPlanResult(plans, None)
